@@ -21,7 +21,7 @@ cloneBoshDeployment :: IO CliRepo
 cloneBoshDeployment = cloneRepository "/tmp/bosh-deployment-dest" boshDeploymentRepoOptions "https://github.com/cloudfoundry/bosh-deployment"
 
 execGit :: CliRepo -> [Text] -> IO Text
-execGit repo args = do
+execGit repo args =
   shelly $ print_stdout False $ errExit True $ run "git" $ gitStdOpts repo ++ args
 
 cloneRepository :: Text -> RepositoryOptions -> Text -> IO CliRepo
@@ -37,4 +37,4 @@ deleteStuff :: Text -> RepositoryOptions -> IO ()
 deleteStuff dest repoOptions = do
   _ <- removePathForcibly (T.unpack dest)
   _ <- removePathForcibly (repoPath repoOptions)
-  maybe (return ()) removePathForcibly (repoWorkingDir repoOptions)
+  mapM_ removePathForcibly (repoWorkingDir repoOptions)
