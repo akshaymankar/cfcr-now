@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Lib where
 
+import Data.Maybe
 import Data.Text as T
 import Git.CmdLine
 import Git.Types
@@ -12,6 +13,7 @@ data BoshConnection = BoshConnection { boshHost :: Text, bosPort :: Int, boshCAC
 deployBosh :: IO BoshConnection
 deployBosh = do
   repo <- cloneBoshDeployment
+  _ <- installBosh $ fromMaybe (cliRepoPath repo) (cliWorkingDir repo)
   undefined
 
 boshDeploymentRepoOptions = defaultRepositoryOptions { repoPath = "/tmp/bosh-deployment-repo"
@@ -38,3 +40,33 @@ deleteStuff dest repoOptions = do
   _ <- removePathForcibly (T.unpack dest)
   _ <- removePathForcibly (repoPath repoOptions)
   mapM_ removePathForcibly (repoWorkingDir repoOptions)
+
+
+installBosh :: Text -> IO (Text, BoshConnection)
+installBosh boshDeploymentPath = do
+  home <- getHomeDirectory
+  let envDir = T.pack home `T.append` "/.know"
+  _ <- shelly $ verbosely $ errExit True $
+    run_ "bosh" $ "create-env" : createEnvArgs envDir  boshDeploymentPath
+  undefined
+
+createEnvArgs :: Text -> Text -> [Text]
+createEnvArgs envDir boshDeploymentPath = ymlPath "bosh.yml"
+                                         : "-n"
+                                         : ("--state=" `T.append` envDir `T.append` "/state.json")
+                                         : ("--vars-store=" `T.append` envDir `T.append` "/creds.yml")
+                                         : "--var=director_name=bosh-lite"
+                                         : "--var=internal_ip=192.168.50.6"
+                                         : "--var=internal_gw=192.168.50.1"
+                                         : "--var=internal_cidr=192.168.50.0/24"
+                                         : "--var=outbound_network_name=NatNetwork"
+                                         : opsFiles
+  where opsFileArg opsFile = "--ops-file=" `T.append` ymlPath opsFile
+        ymlPath opsFile = boshDeploymentPath `T.append` "/" `T.append` opsFile
+        opsFiles = Prelude.map opsFileArg [ "virtualbox/cpi.yml"
+                                          , "virtualbox/outbound-network.yml"
+                                          , "bosh-lite.yml"
+                                          , "bosh-lite-runc.yml"
+                                          , "uaa.yml"
+                                          , "credhub.yml"
+                                          , "jumpbox-user.yml"]
